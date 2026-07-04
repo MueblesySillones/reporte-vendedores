@@ -90,6 +90,25 @@ drop.addEventListener("dragleave", () => { drop.style.borderColor = ""; });
 drop.addEventListener("drop", (e) => { e.preventDefault(); drop.style.borderColor = ""; if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
 el("f-imagen").addEventListener("change", (e) => { if (e.target.files[0]) setFile(e.target.files[0]); });
 
+// Pegar imagen desde el portapapeles (Ctrl+V) — ej: captura de Windows (Win+Shift+S / Impr Pant)
+document.addEventListener("paste", (e) => {
+  if (el("tab-cargar").hidden) return; // solo en la pestaña Cargar
+  const items = (e.clipboardData || window.clipboardData)?.items;
+  if (!items) return;
+  for (const it of items) {
+    if (it.type && it.type.startsWith("image/")) {
+      const file = it.getAsFile();
+      if (file) {
+        e.preventDefault();
+        setFile(file);
+        el("drop-text").textContent = "📋 Captura pegada — lista para enviar";
+        toast("✓ Imagen pegada desde el portapapeles");
+      }
+      return;
+    }
+  }
+});
+
 function setFile(file) {
   if (!file.type.startsWith("image/")) { toast("El archivo debe ser una imagen", true); return; }
   selectedFile = file;
@@ -100,7 +119,9 @@ function setFile(file) {
 }
 
 async function uploadImage(file, vendedor_id) {
-  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+  const nameExt = file.name && file.name.includes(".") ? file.name.split(".").pop() : "";
+  const typeExt = file.type && file.type.includes("/") ? file.type.split("/")[1] : "";
+  const ext = (nameExt || typeExt || "png").toLowerCase();
   const path = `${vendedor_id}/${Date.now()}-${Math.floor(Math.random() * 1e6)}.${ext}`;
   const up = await sb.storage.from(BUCKET).upload(path, file, { contentType: file.type });
   if (up.error) throw up.error;
@@ -125,7 +146,7 @@ el("form").addEventListener("submit", async (e) => {
     el("form").reset();
     el("f-fecha").value = todayISO();
     selectedFile = null; el("preview").innerHTML = "";
-    el("drop-text").textContent = "Tocá para elegir una imagen o arrastrala acá";
+    el("drop-text").textContent = "Tocá para elegir, arrastrá una imagen, o pegá con Ctrl+V";
     fillVendedorSelect();
     toast("✓ Reporte cargado");
     await loadReportes();
