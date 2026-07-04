@@ -36,8 +36,16 @@
             </div>
           </div>
 
-          <label>Situación <span class="req">*</span></label>
-          <input type="text" id="f-situacion" placeholder="Ej: No envía template" required />
+          <div class="row">
+            <div style="flex:2;">
+              <label>Situación <span class="req">*</span></label>
+              <input type="text" id="f-situacion" placeholder="Ej: No envía template" required />
+            </div>
+            <div style="flex:1;min-width:150px;">
+              <label>Fecha del hecho</label>
+              <input type="date" id="f-fecha" />
+            </div>
+          </div>
 
           <label>Cuerpo / detalle</label>
           <textarea id="f-cuerpo" placeholder="Describí el caso…"></textarea>
@@ -64,9 +72,18 @@
           <select id="r-sucursal" style="width:220px;"><option value="">Todas las sucursales</option></select>
         </div>
         <div class="spacer"></div>
-        <button class="btn secondary small" id="btn-excel">⬇ Exportar Excel</button>
-        <button class="btn secondary small" id="btn-pdf">🖨 Exportar PDF</button>
+        <button class="btn secondary small" id="btn-vendedores">👥 Vendedores</button>
+        <button class="btn secondary small" id="btn-excel">⬇ Excel</button>
         <button class="btn secondary small" id="btn-refresh">↻ Actualizar</button>
+      </div>
+
+      <!-- Barra de generación de PDF -->
+      <div class="pdfbar">
+        <label class="check"><input type="checkbox" id="sel-all" /> Seleccionar todos</label>
+        <span class="muted" id="sel-count">0 seleccionados</span>
+        <div class="spacer"></div>
+        <label class="check"><input type="checkbox" id="pdf-imgs" checked /> Incluir capturas</label>
+        <button class="btn small" id="btn-pdf">📄 Generar PDF</button>
       </div>
 
       <div class="report-grid">
@@ -81,11 +98,36 @@
     </section>
   </div>
 
+  <!-- ======================= MODAL VENDEDORES ======================= -->
+  <div class="modal" id="modal-vend">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2>Gestionar vendedores</h2>
+        <button class="x" id="modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="addbox">
+          <div class="row">
+            <div style="flex:2;"><label>Nombre</label><input type="text" id="nv-nombre" placeholder="Nombre del vendedor" /></div>
+            <div style="flex:1;"><label>Sucursal</label>
+              <input type="text" id="nv-sucursal" list="suc-list" placeholder="Sucursal" />
+              <datalist id="suc-list"></datalist>
+            </div>
+          </div>
+          <button class="btn small" id="nv-add" style="margin-top:10px;">+ Agregar vendedor</button>
+        </div>
+        <div id="manage-list" class="manage-list"></div>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
   <div class="lightbox" id="lightbox"><img src="" alt="" /></div>
+  <div class="overlay" id="overlay"><div class="spinner"></div><div id="overlay-text">Generando PDF…</div></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
