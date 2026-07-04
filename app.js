@@ -189,32 +189,38 @@ function reportesVisibles(id) { return reportesDe(id).filter(enPeriodo); }
 
 function fillPeriodoSelect() {
   const cur = el("r-periodo").value;
-  const seen = new Map();
+  const months = new Map(); // "anio-mm" -> { anio, mes, q1, q2 }
   for (const r of reportes) {
     const [anio, mes, day] = fechaDeReporte(r).split("-").map(Number);
-    const q = day <= 15 ? 1 : 2;
-    const key = `${anio}-${p2(mes)}-${q}`;
-    if (!seen.has(key)) seen.set(key, { anio, mes, q });
+    const key = `${anio}-${p2(mes)}`;
+    if (!months.has(key)) months.set(key, { anio, mes, q1: false, q2: false });
+    const b = months.get(key);
+    if (day <= 15) b.q1 = true; else b.q2 = true;
   }
-  const keys = [...seen.keys()].sort((a, b) => b.localeCompare(a)); // más nuevo primero
+  const keys = [...months.keys()].sort((a, b) => b.localeCompare(a)); // más nuevo primero
   let opts = `<option value="">Todos los períodos</option>`;
   for (const key of keys) {
-    const b = seen.get(key);
-    opts += `<option value="${key}">${MESES[b.mes - 1]} ${b.anio} — ${b.q === 1 ? "1ª" : "2ª"} quincena</option>`;
+    const b = months.get(key);
+    const mesTxt = `${MESES[b.mes - 1]} ${b.anio}`;
+    opts += `<option value="${key}-m">${mesTxt} — Mes completo</option>`;
+    if (b.q1) opts += `<option value="${key}-1">${mesTxt} — 1ª quincena</option>`;
+    if (b.q2) opts += `<option value="${key}-2">${mesTxt} — 2ª quincena</option>`;
   }
   el("r-periodo").innerHTML = opts;
-  el("r-periodo").value = keys.includes(cur) ? cur : "";
-  if (!keys.includes(cur)) periodo = null;
+  const valid = new Set(Array.from(el("r-periodo").options).map((o) => o.value));
+  el("r-periodo").value = valid.has(cur) ? cur : "";
+  if (!valid.has(cur)) periodo = null;
 }
 
 el("r-periodo").addEventListener("change", () => {
   const v = el("r-periodo").value;
-  if (!v) periodo = null;
+  if (!v) { periodo = null; }
   else {
-    const [anio, mes, q] = v.split("-").map(Number);
-    periodo = q === 1
-      ? { desde: `${anio}-${p2(mes)}-01`, hasta: `${anio}-${p2(mes)}-15` }
-      : { desde: `${anio}-${p2(mes)}-16`, hasta: `${anio}-${p2(mes)}-${p2(lastDay(anio, mes))}` };
+    const [anioS, mesS, part] = v.split("-");
+    const anio = Number(anioS), mes = Number(mesS);
+    if (part === "1") periodo = { desde: `${anio}-${p2(mes)}-01`, hasta: `${anio}-${p2(mes)}-15` };
+    else if (part === "2") periodo = { desde: `${anio}-${p2(mes)}-16`, hasta: `${anio}-${p2(mes)}-${p2(lastDay(anio, mes))}` };
+    else periodo = { desde: `${anio}-${p2(mes)}-01`, hasta: `${anio}-${p2(mes)}-${p2(lastDay(anio, mes))}` };
   }
   renderVendList(); syncSelAll();
   if (selectedVendedor) renderDetail(selectedVendedor);
