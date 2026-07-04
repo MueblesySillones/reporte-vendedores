@@ -182,7 +182,7 @@ el("btn-refresh").addEventListener("click", refreshAll);
 let periodo = null; // { desde, hasta } o null = todos
 function enPeriodo(r) {
   if (!periodo) return true;
-  const f = fechaCargaLocal(r.created_at);
+  const f = fechaDeReporte(r);
   return f >= periodo.desde && f <= periodo.hasta;
 }
 function reportesVisibles(id) { return reportesDe(id).filter(enPeriodo); }
@@ -191,8 +191,8 @@ function fillPeriodoSelect() {
   const cur = el("r-periodo").value;
   const seen = new Map();
   for (const r of reportes) {
-    const d = new Date(r.created_at);
-    const anio = d.getFullYear(), mes = d.getMonth() + 1, q = d.getDate() <= 15 ? 1 : 2;
+    const [anio, mes, day] = fechaDeReporte(r).split("-").map(Number);
+    const q = day <= 15 ? 1 : 2;
     const key = `${anio}-${p2(mes)}-${q}`;
     if (!seen.has(key)) seen.set(key, { anio, mes, q });
   }
@@ -676,10 +676,15 @@ function fechaCargaLocal(iso) {
   const d = new Date(iso);
   return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
 }
+// Fecha que define el período: la "fecha del hecho" que se le pone a cada situación
+// (si por algún motivo no tiene, cae en la fecha de carga).
+function fechaDeReporte(r) {
+  return r.fecha_hecho || fechaCargaLocal(r.created_at);
+}
 function situacionesEnRango(desde, hasta, sucursal) {
   const m = vmap();
   return reportes.filter((r) => {
-    const f = fechaCargaLocal(r.created_at);
+    const f = fechaDeReporte(r);
     if (desde && f < desde) return false;
     if (hasta && f > hasta) return false;
     if (sucursal && m[r.vendedor_id]?.sucursal !== sucursal) return false;
