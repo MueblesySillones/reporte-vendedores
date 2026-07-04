@@ -95,7 +95,18 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); bo
 }
 .file-drop:hover { border-color: var(--accent); color: var(--accent); }
 .preview { margin-top: 12px; }
-.preview img { max-width: 100%; max-height: 260px; border-radius: 10px; border: 1px solid var(--line); }
+.preview-wrap { position: relative; display: inline-block; max-width: 100%; }
+.preview img { max-width: 100%; max-height: 260px; border-radius: 10px; border: 1px solid var(--line); display: block; }
+.preview-x {
+  position: absolute; top: -10px; right: -10px;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--danger); color: #fff; border: 2px solid #fff;
+  font-size: 13px; line-height: 1; cursor: pointer; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow);
+}
+.preview-x:hover { background: #922f2f; }
+.preview-x:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
 .btn {
   display: inline-flex; align-items: center; gap: 8px;

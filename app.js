@@ -114,8 +114,22 @@ function setFile(file) {
   selectedFile = file;
   el("drop-text").textContent = file.name;
   const reader = new FileReader();
-  reader.onload = (e) => { el("preview").innerHTML = `<img src="${e.target.result}" alt="preview" />`; };
+  reader.onload = (e) => {
+    el("preview").innerHTML =
+      `<div class="preview-wrap">
+         <img src="${e.target.result}" alt="preview" />
+         <button type="button" class="preview-x" id="preview-x" title="Quitar imagen" aria-label="Quitar imagen">✕</button>
+       </div>`;
+    el("preview-x").addEventListener("click", clearImage);
+  };
   reader.readAsDataURL(file);
+}
+
+function clearImage() {
+  selectedFile = null;
+  el("f-imagen").value = "";
+  el("preview").innerHTML = "";
+  el("drop-text").textContent = "Tocá para elegir, arrastrá una imagen, o pegá con Ctrl+V";
 }
 
 async function uploadImage(file, vendedor_id) {
