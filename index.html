@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Reporte de Vendedores</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">Reporte de Vendedores<small>Seguimiento por sucursal</small></div>
+      <div class="tabs">
+        <button class="tab active" data-tab="cargar">Cargar</button>
+        <button class="tab" data-tab="reporte">Reporte</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <!-- ======================= CARGAR ======================= -->
+    <section id="tab-cargar">
+      <div class="card" style="max-width:640px;margin:0 auto;">
+        <h1>Cargar situación</h1>
+        <p class="sub">Registrá una situación de un vendedor. Podés adjuntar una captura.</p>
+
+        <form id="form">
+          <div class="row">
+            <div>
+              <label>Sucursal</label>
+              <select id="f-sucursal"><option value="">Todas</option></select>
+            </div>
+            <div>
+              <label>Vendedor <span class="req">*</span></label>
+              <select id="f-vendedor" required><option value="">Seleccioná…</option></select>
+            </div>
+          </div>
+
+          <label>Situación <span class="req">*</span></label>
+          <input type="text" id="f-situacion" placeholder="Ej: No envía template" required />
+
+          <label>Cuerpo / detalle</label>
+          <textarea id="f-cuerpo" placeholder="Describí el caso…"></textarea>
+
+          <label>Imagen (captura)</label>
+          <div class="file-drop" id="drop">
+            <span id="drop-text">Tocá para elegir una imagen o arrastrala acá</span>
+            <input type="file" id="f-imagen" accept="image/*" hidden />
+          </div>
+          <div class="preview" id="preview"></div>
+
+          <div style="margin-top:22px;">
+            <button type="submit" class="btn" id="submit">Enviar reporte</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ======================= REPORTE ======================= -->
+    <section id="tab-reporte" hidden>
+      <div class="toolbar">
+        <div>
+          <label style="margin:0 0 4px;">Filtrar por sucursal</label>
+          <select id="r-sucursal" style="width:220px;"><option value="">Todas las sucursales</option></select>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn secondary small" id="btn-excel">⬇ Exportar Excel</button>
+        <button class="btn secondary small" id="btn-pdf">🖨 Exportar PDF</button>
+        <button class="btn secondary small" id="btn-refresh">↻ Actualizar</button>
+      </div>
+
+      <div class="report-grid">
+        <div class="list-panel">
+          <div class="list-head"><strong>Vendedores</strong> <span class="muted" id="vend-count"></span></div>
+          <div id="vend-list"><div class="loader">Cargando…</div></div>
+        </div>
+        <div id="detail">
+          <div class="card"><div class="detail-empty">Elegí un vendedor de la lista para ver su legajo.</div></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div class="lightbox" id="lightbox"><img src="" alt="" /></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
