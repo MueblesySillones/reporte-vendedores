@@ -210,6 +210,30 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); bo
 .mg-item.off .mg-name { color: var(--muted); text-decoration: line-through; }
 .mg-item .mg-count { font-size: 12px; color: var(--muted); }
 
+/* ----- crear reporte (preview) ----- */
+.inf-preview {
+  margin-top: 16px; padding: 14px 16px; border-radius: 10px;
+  background: #eef4f0; border: 1px solid #d5e5db; color: var(--accent);
+  font-size: 14px; font-weight: 600; text-align: center;
+}
+.inf-preview.empty { background: #fbf3f3; border-color: #e7cccc; color: var(--danger); }
+
+/* ----- lista de reportes archivados ----- */
+.informes-month { font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); font-weight: 700; margin: 22px 0 10px; }
+.informes-month:first-child { margin-top: 4px; }
+.inf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.inf-item {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 18px; display: flex; flex-direction: column; gap: 4px;
+}
+.inf-item .inf-tit { font-weight: 700; font-size: 16px; }
+.inf-item .inf-sub { color: var(--muted); font-size: 13px; }
+.inf-item .inf-nums { display: flex; gap: 8px; margin: 10px 0 4px; }
+.inf-item .inf-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.pill { background: #eef4f0; color: var(--accent); border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 700; }
+.empty-state { text-align: center; color: var(--muted); padding: 60px 20px; }
+.empty-state h1 { color: var(--ink); }
+
 /* overlay spinner */
 .overlay { position: fixed; inset: 0; background: rgba(244,242,238,.85); display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px; z-index: 220; color: var(--ink); font-weight: 600; }
 .overlay.show { display: flex; }

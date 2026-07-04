@@ -12,7 +12,8 @@
       <div class="brand">Reporte de Vendedores<small>Seguimiento por sucursal</small></div>
       <div class="tabs">
         <button class="tab active" data-tab="cargar">Cargar</button>
-        <button class="tab" data-tab="reporte">Reporte</button>
+        <button class="tab" data-tab="reporte">Seguimiento</button>
+        <button class="tab" data-tab="reportes">Reportes</button>
       </div>
     </div>
   </div>
@@ -72,6 +73,7 @@
           <select id="r-sucursal" style="width:220px;"><option value="">Todas las sucursales</option></select>
         </div>
         <div class="spacer"></div>
+        <button class="btn small" id="btn-crear-informe">➕ Crear reporte</button>
         <button class="btn secondary small" id="btn-vendedores">👥 Vendedores</button>
         <button class="btn secondary small" id="btn-excel">⬇ Excel</button>
         <button class="btn secondary small" id="btn-refresh">↻ Actualizar</button>
@@ -96,6 +98,12 @@
         </div>
       </div>
     </section>
+
+    <!-- ======================= REPORTES (archivo) ======================= -->
+    <section id="tab-reportes" hidden>
+      <div id="informes-list"><div class="loader">Cargando…</div></div>
+      <div id="informe-detail" hidden></div>
+    </section>
   </div>
 
   <!-- ======================= MODAL VENDEDORES ======================= -->
@@ -117,6 +125,43 @@
           <button class="btn small" id="nv-add" style="margin-top:10px;">+ Agregar vendedor</button>
         </div>
         <div id="manage-list" class="manage-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= MODAL CREAR REPORTE ======================= -->
+  <div class="modal" id="modal-informe">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2>Crear reporte</h2>
+        <button class="x" id="inf-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="sub" style="margin-bottom:16px;">Se guarda una copia congelada de las situaciones del período elegido (según su fecha de carga).</p>
+        <div class="row">
+          <div><label>Mes</label><select id="inf-mes"></select></div>
+          <div style="max-width:120px;"><label>Año</label><input type="number" id="inf-anio" /></div>
+        </div>
+        <label>Período</label>
+        <select id="inf-periodo">
+          <option value="q1">1ª quincena (días 1–15)</option>
+          <option value="q2">2ª quincena (16 a fin de mes)</option>
+          <option value="mes">Mes completo</option>
+          <option value="custom">Rango personalizado…</option>
+        </select>
+        <div id="inf-custom" class="row" hidden style="margin-top:10px;">
+          <div><label>Desde</label><input type="date" id="inf-desde" /></div>
+          <div><label>Hasta</label><input type="date" id="inf-hasta" /></div>
+        </div>
+        <label>Sucursal</label>
+        <select id="inf-sucursal"><option value="">Todas las sucursales</option></select>
+
+        <div class="inf-preview" id="inf-preview">—</div>
+
+        <div style="margin-top:18px;display:flex;gap:10px;">
+          <button class="btn" id="inf-crear">Cerrar y guardar reporte</button>
+          <button class="btn ghost" id="inf-cancel">Cancelar</button>
+        </div>
       </div>
     </div>
   </div>

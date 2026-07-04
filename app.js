@@ -450,22 +450,46 @@ async function fetchImageForPdf(url) {
 
 el("btn-pdf").addEventListener("click", generarPDF);
 
-async function generarPDF() {
+// dataset del PDF a partir de la selección viva de la pestaña Seguimiento
+function datasetDesdeSeleccion() {
   let ids = [...pdfPick];
   if (!ids.length && selectedVendedor) ids = [selectedVendedor];
-  if (!ids.length) { toast("Marcá al menos un vendedor para el PDF", true); return; }
-
-  const incluirImgs = el("pdf-imgs").checked;
+  if (!ids.length) return null;
   const m = vmap();
   const seleccion = ids.map((id) => m[id]).filter(Boolean)
     .sort((a, b) => a.sucursal.localeCompare(b.sucursal) || a.nombre.localeCompare(b.nombre));
+  const sucs = [...new Set(seleccion.map((v) => v.sucursal))];
+  return {
+    scopeLabel: sucs.length === 1 ? `Sucursal ${sucs[0]}` : `${sucs.length} sucursales`,
+    fname: seleccion.length === 1
+      ? `reporte-${seleccion[0].nombre.replace(/\s+/g, "_")}.pdf`
+      : sucs.length === 1 ? `reporte-${sucs[0].replace(/\s+/g, "_")}.pdf` : `reporte-vendedores.pdf`,
+    vendedores: seleccion.map((v) => ({
+      nombre: v.nombre, sucursal: v.sucursal,
+      situaciones: reportesDe(v.id).map((r) => ({
+        situacion: r.situacion, cuerpo: r.cuerpo, fecha_hecho: r.fecha_hecho, created_at: r.created_at, imagen_url: r.imagen_url,
+      })),
+    })),
+  };
+}
+
+async function generarPDF() {
+  const ds = datasetDesdeSeleccion();
+  if (!ds) { toast("Marcá al menos un vendedor para el PDF", true); return; }
+  await renderPDF(ds, { incluirImgs: el("pdf-imgs").checked });
+}
+
+// Motor de PDF reutilizable. ds = { titulo?, scopeLabel?, fname?, vendedores: [{nombre,sucursal,situaciones:[...]}] }
+async function renderPDF(ds, opts) {
+  const incluirImgs = !opts || opts.incluirImgs !== false;
+  const vlist = ds.vendedores || [];
+  if (!vlist.length) { toast("No hay datos para el PDF", true); return; }
 
   showOverlay("Generando PDF…");
   try {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: "mm", format: "a4" });
-    const PW = 210, PH = 297, MX = 18;
-    const CW = PW - MX * 2;
+    const PW = 210, PH = 297, MX = 18, CW = PW - MX * 2;
     const INK = [31, 29, 26], MUT = [124, 118, 108], ACC = [47, 111, 78], PAPER = [244, 242, 238], LINE = [220, 214, 202];
 
     const paintBg = () => { doc.setFillColor(...PAPER); doc.rect(0, 0, PW, PH, "F"); };
@@ -473,8 +497,8 @@ async function generarPDF() {
     const newPage = () => { doc.addPage(); paintBg(); y = MX; };
     const ensure = (need) => { if (y + need > PH - MX) newPage(); };
 
-    const totalSit = seleccion.reduce((s, v) => s + reportesDe(v.id).length, 0);
-    const sucs = [...new Set(seleccion.map((v) => v.sucursal))];
+    const totalSit = vlist.reduce((s, v) => s + v.situaciones.length, 0);
+    const titulo = ds.titulo || "Reporte de Vendedores";
 
     /* ---------- PORTADA ---------- */
     paintBg();
@@ -482,52 +506,43 @@ async function generarPDF() {
     if (logo) {
       const im = await loadImg(logo);
       const lw = 92, lh = im ? (im.naturalHeight * lw) / im.naturalWidth : 26;
-      doc.addImage(logo, "PNG", (PW - lw) / 2, 46, lw, lh);
+      doc.addImage(logo, "PNG", (PW - lw) / 2, 44, lw, lh);
     }
-    doc.setDrawColor(...ACC); doc.setLineWidth(0.6); doc.line(MX + 30, 96, PW - MX - 30, 96);
+    doc.setDrawColor(...ACC); doc.setLineWidth(0.6); doc.line(MX + 30, 94, PW - MX - 30, 94);
 
-    doc.setTextColor(...INK); doc.setFont("helvetica", "bold"); doc.setFontSize(30);
-    doc.text("Reporte de Vendedores", PW / 2, 122, { align: "center" });
+    doc.setTextColor(...INK); doc.setFont("helvetica", "bold"); doc.setFontSize(titulo.length > 34 ? 22 : 27);
+    doc.text(doc.splitTextToSize(titulo, CW), PW / 2, 118, { align: "center" });
 
-    doc.setFont("helvetica", "normal"); doc.setFontSize(13); doc.setTextColor(...MUT);
-    const scopeTxt = sucs.length === 1
-      ? `Sucursal ${sucs[0]}`
-      : `${sucs.length} sucursales`;
-    doc.text(scopeTxt, PW / 2, 134, { align: "center" });
+    if (ds.scopeLabel) {
+      doc.setFont("helvetica", "normal"); doc.setFontSize(13); doc.setTextColor(...MUT);
+      doc.text(ds.scopeLabel, PW / 2, 132, { align: "center" });
+    }
 
     // caja de metadatos
     doc.setDrawColor(...LINE); doc.setLineWidth(0.4);
-    doc.roundedRect(MX + 24, 150, CW - 48, 46, 3, 3, "S");
-    doc.setFontSize(11); doc.setTextColor(...INK);
-    const meta = [
-      ["Vendedores", String(seleccion.length)],
-      ["Situaciones", String(totalSit)],
-      ["Generado", fmtDay(todayISO())],
-    ];
-    let mx = MX + 24, seg = (CW - 48) / 3;
+    doc.roundedRect(MX + 24, 148, CW - 48, 46, 3, 3, "S");
+    const meta = [["Vendedores", String(vlist.length)], ["Situaciones", String(totalSit)], ["Generado", fmtDay(todayISO())]];
+    const seg = (CW - 48) / 3;
     meta.forEach(([k, v], i) => {
-      const cx = mx + seg * i + seg / 2;
+      const cx = MX + 24 + seg * i + seg / 2;
       doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(...INK);
-      doc.text(v, cx, 172, { align: "center" });
+      doc.text(v, cx, 170, { align: "center" });
       doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(...MUT);
-      doc.text(k.toUpperCase(), cx, 182, { align: "center" });
+      doc.text(k.toUpperCase(), cx, 180, { align: "center" });
     });
 
-    // listado de vendedores incluidos
     doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(...MUT);
-    const nombres = seleccion.map((v) => `${v.nombre} (${v.sucursal})`).join("   ·   ");
-    const wrapped = doc.splitTextToSize(nombres, CW - 20);
-    doc.text(wrapped.slice(0, 6), PW / 2, 210, { align: "center" });
+    const nombres = vlist.map((v) => `${v.nombre} (${v.sucursal})`).join("   ·   ");
+    doc.text(doc.splitTextToSize(nombres, CW - 20).slice(0, 6), PW / 2, 208, { align: "center" });
 
     doc.setFontSize(9); doc.setTextColor(...MUT);
     doc.text("Muebles y Sillones · documento interno", PW / 2, PH - 14, { align: "center" });
 
     /* ---------- DETALLE POR VENDEDOR ---------- */
-    for (const v of seleccion) {
-      const rs = reportesDe(v.id);
+    for (const v of vlist) {
+      const rs = v.situaciones;
       newPage();
 
-      // encabezado del vendedor
       doc.setFont("helvetica", "bold"); doc.setFontSize(20); doc.setTextColor(...INK);
       doc.text(v.nombre, MX, y + 4);
       doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(...MUT);
@@ -541,69 +556,55 @@ async function generarPDF() {
         continue;
       }
 
-      // conteo por situación
       const conteo = conteoPorSituacion(rs);
       doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.setTextColor(...MUT);
       doc.text("CONTEO POR SITUACIÓN", MX, y); y += 6;
       doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(...INK);
-      const conteoTxt = conteo.map((c) => `${c.label}: ${c.count}`).join("     ");
-      const cwrap = doc.splitTextToSize(conteoTxt, CW);
+      const cwrap = doc.splitTextToSize(conteo.map((c) => `${c.label}: ${c.count}`).join("     "), CW);
       ensure(cwrap.length * 5 + 6);
       doc.text(cwrap, MX, y); y += cwrap.length * 5 + 8;
 
-      // cada situación
       for (const r of rs) {
         ensure(24);
-        // fecha
         doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(...ACC);
-        const fecha = r.fecha_hecho ? fmtDay(r.fecha_hecho) : fmtDay(r.created_at.slice(0, 10));
-        doc.text(fecha.toUpperCase(), MX, y);
-        // situación
+        const fecha = r.fecha_hecho ? fmtDay(r.fecha_hecho) : (r.created_at ? fmtDay(r.created_at.slice(0, 10)) : "");
+        if (fecha) doc.text(fecha.toUpperCase(), MX, y);
         doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(...INK);
         const sitWrap = doc.splitTextToSize(r.situacion, CW);
         doc.text(sitWrap, MX, y + 6);
         y += 6 + sitWrap.length * 5.5;
-        // cuerpo
         if (r.cuerpo) {
           doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(60, 56, 50);
           const bodyWrap = doc.splitTextToSize(r.cuerpo, CW);
           for (let i = 0; i < bodyWrap.length; i++) { ensure(6); doc.text(bodyWrap[i], MX, y); y += 5.2; }
           y += 1;
         }
-        // imagen
         if (incluirImgs && r.imagen_url) {
           const img = await fetchImageForPdf(r.imagen_url);
           if (img) {
-            let iw = Math.min(CW * 0.72, 120);
-            let ih = (img.h * iw) / img.w;
-            const maxH = 92;
-            if (ih > maxH) { ih = maxH; iw = (img.w * ih) / img.h; }
+            let iw = Math.min(CW * 0.72, 120), ih = (img.h * iw) / img.w;
+            if (ih > 92) { ih = 92; iw = (img.w * ih) / img.h; }
             ensure(ih + 6);
             doc.addImage(img.dataUrl, img.fmt, MX, y + 2, iw, ih);
             doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.rect(MX, y + 2, iw, ih);
             y += ih + 6;
           }
         }
-        // separador
         y += 3; ensure(6);
         doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.line(MX, y, PW - MX, y);
         y += 7;
       }
     }
 
-    /* ---------- numeración de páginas ---------- */
     const pages = doc.getNumberOfPages();
     for (let p = 2; p <= pages; p++) {
       doc.setPage(p);
       doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(...MUT);
       doc.text(`${p - 1} / ${pages - 1}`, PW - MX, PH - 10, { align: "right" });
-      doc.text("Reporte de Vendedores · Muebles y Sillones", MX, PH - 10);
+      doc.text(`${titulo} · Muebles y Sillones`, MX, PH - 10);
     }
 
-    const fname = seleccion.length === 1
-      ? `reporte-${seleccion[0].nombre.replace(/\s+/g, "_")}.pdf`
-      : sucs.length === 1 ? `reporte-${sucs[0].replace(/\s+/g, "_")}.pdf` : `reporte-vendedores.pdf`;
-    doc.save(fname);
+    doc.save(ds.fname || "reporte-vendedores.pdf");
     toast("✓ PDF generado");
   } catch (err) {
     console.error(err); toast("Error generando el PDF: " + (err.message || err), true);
@@ -613,20 +614,237 @@ async function generarPDF() {
 }
 
 /* ========================================================
+   REPORTES ARCHIVADOS (informes cerrados)
+======================================================== */
+let informes = [];
+const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+const p2 = (n) => String(n).padStart(2, "0");
+
+async function loadInformes() {
+  const { data, error } = await sb.from("rv_informes")
+    .select("id,titulo,periodo,anio,mes,desde,hasta,sucursal,total_situaciones,total_vendedores,created_at")
+    .order("anio", { ascending: false }).order("mes", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false });
+  if (error) { console.error(error); return; }
+  informes = data || [];
+}
+
+/* ---- fecha de carga (local) de una situación ---- */
+function fechaCargaLocal(iso) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+}
+function situacionesEnRango(desde, hasta, sucursal) {
+  const m = vmap();
+  return reportes.filter((r) => {
+    const f = fechaCargaLocal(r.created_at);
+    if (desde && f < desde) return false;
+    if (hasta && f > hasta) return false;
+    if (sucursal && m[r.vendedor_id]?.sucursal !== sucursal) return false;
+    return true;
+  });
+}
+function lastDay(anio, mes) { return new Date(anio, mes, 0).getDate(); }
+
+function infRange() {
+  const anio = parseInt(el("inf-anio").value, 10);
+  const mes = parseInt(el("inf-mes").value, 10);
+  const periodo = el("inf-periodo").value;
+  if (periodo === "custom") return { periodo, anio, mes: null, desde: el("inf-desde").value || null, hasta: el("inf-hasta").value || null };
+  if (!anio || !mes) return { periodo, anio, mes, desde: null, hasta: null };
+  let d1, d2;
+  if (periodo === "q1") { d1 = `${anio}-${p2(mes)}-01`; d2 = `${anio}-${p2(mes)}-15`; }
+  else if (periodo === "q2") { d1 = `${anio}-${p2(mes)}-16`; d2 = `${anio}-${p2(mes)}-${p2(lastDay(anio, mes))}`; }
+  else { d1 = `${anio}-${p2(mes)}-01`; d2 = `${anio}-${p2(mes)}-${p2(lastDay(anio, mes))}`; }
+  return { periodo, anio, mes, desde: d1, hasta: d2 };
+}
+function infTitulo(r, suc) {
+  const mesTxt = r.mes ? MESES[r.mes - 1] : "";
+  let base;
+  if (r.periodo === "q1") base = `${mesTxt} ${r.anio} — 1ª quincena`;
+  else if (r.periodo === "q2") base = `${mesTxt} ${r.anio} — 2ª quincena`;
+  else if (r.periodo === "mes") base = `${mesTxt} ${r.anio} — Mes completo`;
+  else base = `${fmtDay(r.desde)} a ${fmtDay(r.hasta)}`;
+  return base + (suc ? ` · ${suc}` : "");
+}
+
+function openInformeModal() {
+  const now = new Date();
+  el("inf-mes").innerHTML = MESES.map((mm, i) => `<option value="${i + 1}">${mm}</option>`).join("");
+  el("inf-mes").value = String(now.getMonth() + 1);
+  el("inf-anio").value = String(now.getFullYear());
+  el("inf-sucursal").innerHTML = `<option value="">Todas las sucursales</option>` + sucursales().map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join("");
+  el("inf-periodo").value = "q1"; el("inf-custom").hidden = true;
+  updateInfPreview();
+  el("modal-informe").className = "modal show";
+}
+function closeInformeModal() { el("modal-informe").className = "modal"; }
+function setInfPreview(txt, empty) { const p = el("inf-preview"); p.textContent = txt; p.className = "inf-preview" + (empty ? " empty" : ""); }
+function updateInfPreview() {
+  const { desde, hasta } = infRange();
+  const suc = el("inf-sucursal").value;
+  if (!desde || !hasta) { setInfPreview("Elegí un período válido", true); return; }
+  if (desde > hasta) { setInfPreview("La fecha 'desde' es posterior a 'hasta'", true); return; }
+  const rs = situacionesEnRango(desde, hasta, suc);
+  const vends = new Set(rs.map((r) => r.vendedor_id));
+  if (!rs.length) { setInfPreview(`Sin situaciones entre ${fmtDay(desde)} y ${fmtDay(hasta)}`, true); return; }
+  setInfPreview(`${rs.length} situación(es) · ${vends.size} vendedor(es) · ${fmtDay(desde)} → ${fmtDay(hasta)}`, false);
+}
+
+el("btn-crear-informe").addEventListener("click", openInformeModal);
+el("inf-close").addEventListener("click", closeInformeModal);
+el("inf-cancel").addEventListener("click", closeInformeModal);
+el("modal-informe").addEventListener("click", (e) => { if (e.target.id === "modal-informe") closeInformeModal(); });
+el("inf-periodo").addEventListener("change", () => { el("inf-custom").hidden = el("inf-periodo").value !== "custom"; updateInfPreview(); });
+["inf-mes", "inf-anio", "inf-desde", "inf-hasta", "inf-sucursal"].forEach((id) => el(id).addEventListener("change", updateInfPreview));
+
+el("inf-crear").addEventListener("click", async () => {
+  const rng = infRange();
+  const suc = el("inf-sucursal").value || null;
+  if (!rng.desde || !rng.hasta || rng.desde > rng.hasta) { toast("Elegí un período válido", true); return; }
+  const rs = situacionesEnRango(rng.desde, rng.hasta, suc);
+  if (!rs.length) { toast("No hay situaciones en ese período", true); return; }
+
+  const m = vmap(), byV = {};
+  for (const r of rs) {
+    const v = m[r.vendedor_id]; if (!v) continue;
+    if (!byV[r.vendedor_id]) byV[r.vendedor_id] = { nombre: v.nombre, sucursal: v.sucursal, situaciones: [] };
+    byV[r.vendedor_id].situaciones.push({ situacion: r.situacion, cuerpo: r.cuerpo, fecha_hecho: r.fecha_hecho, created_at: r.created_at, imagen_url: r.imagen_url });
+  }
+  const vendsArr = Object.values(byV).sort((a, b) => a.sucursal.localeCompare(b.sucursal) || a.nombre.localeCompare(b.nombre));
+  const row = {
+    titulo: infTitulo(rng, suc), periodo: rng.periodo, anio: rng.anio, mes: rng.mes,
+    desde: rng.desde, hasta: rng.hasta, sucursal: suc,
+    total_situaciones: rs.length, total_vendedores: vendsArr.length,
+    data: { vendedores: vendsArr },
+  };
+  el("inf-crear").disabled = true;
+  const { error } = await sb.from("rv_informes").insert(row);
+  el("inf-crear").disabled = false;
+  if (error) { toast("Error al guardar el reporte", true); console.error(error); return; }
+  await loadInformes();
+  closeInformeModal();
+  toast("✓ Reporte creado y guardado");
+  switchTab("reportes");
+});
+
+async function fetchInforme(id) {
+  const { data, error } = await sb.from("rv_informes").select("*").eq("id", id).single();
+  if (error) { toast("Error al abrir el reporte", true); console.error(error); return null; }
+  return data;
+}
+
+function renderInformes() {
+  el("informe-detail").hidden = true;
+  el("informes-list").hidden = false;
+  if (!informes.length) {
+    el("informes-list").innerHTML = `<div class="empty-state"><h1>Todavía no hay reportes</h1><p>Andá a <b>Seguimiento</b> y tocá <b>➕ Crear reporte</b> para cerrar tu primera quincena.</p></div>`;
+    return;
+  }
+  let html = "", lastKey = null;
+  for (const inf of informes) {
+    const key = `${inf.anio}-${inf.mes || "x"}`;
+    const monthLabel = inf.mes ? `${MESES[inf.mes - 1]} ${inf.anio}` : `${inf.anio}`;
+    if (key !== lastKey) {
+      if (lastKey !== null) html += `</div>`;
+      html += `<div class="informes-month">${monthLabel}</div><div class="inf-grid">`;
+      lastKey = key;
+    }
+    html += `<div class="inf-item">
+      <div class="inf-tit">${esc(inf.titulo)}</div>
+      <div class="inf-sub">${fmtDay(inf.desde)} → ${fmtDay(inf.hasta)}</div>
+      <div class="inf-nums"><span class="pill">${inf.total_vendedores} vend.</span><span class="pill">${inf.total_situaciones} sit.</span></div>
+      <div class="inf-sub">Creado ${fmtDateTime(inf.created_at)}</div>
+      <div class="inf-actions">
+        <button class="btn small" data-vinf="${inf.id}">Ver</button>
+        <button class="btn ghost" data-pinf="${inf.id}">📄 PDF</button>
+        <button class="btn ghost danger" data-dinf="${inf.id}">🗑</button>
+      </div>
+    </div>`;
+  }
+  html += `</div>`;
+  el("informes-list").innerHTML = html;
+  el("informes-list").querySelectorAll("[data-vinf]").forEach((b) => b.addEventListener("click", () => verInforme(b.dataset.vinf)));
+  el("informes-list").querySelectorAll("[data-pinf]").forEach((b) => b.addEventListener("click", () => pdfInforme(b.dataset.pinf)));
+  el("informes-list").querySelectorAll("[data-dinf]").forEach((b) => b.addEventListener("click", () => borrarInforme(b.dataset.dinf)));
+}
+
+async function verInforme(id) {
+  showOverlay("Abriendo…");
+  const inf = await fetchInforme(id);
+  hideOverlay();
+  if (!inf) return;
+  const vlist = (inf.data && inf.data.vendedores) || [];
+  let body = "";
+  for (const v of vlist) {
+    const conteo = conteoPorSituacion(v.situaciones);
+    const chips = conteo.map((c) => `<span class="chip">${esc(c.label)}<b>${c.count}</b></span>`).join("");
+    const entries = v.situaciones.map((r) => `
+      <div class="entry">
+        <div class="entry-top">
+          <span class="sit">${esc(r.situacion)}</span>
+          <span class="date">${r.fecha_hecho ? "📅 " + fmtDay(r.fecha_hecho) : ""}<small>cargado ${r.created_at ? fmtDateTime(r.created_at) : ""}</small></span>
+        </div>
+        ${r.cuerpo ? `<p class="body">${esc(r.cuerpo)}</p>` : ""}
+        ${r.imagen_url ? `<div class="thumb"><img src="${r.imagen_url}" data-full="${r.imagen_url}" alt="captura" /></div>` : ""}
+      </div>`).join("");
+    body += `<div class="card" style="margin-bottom:16px;">
+      <h1>${esc(v.nombre)}</h1><p class="sub">${esc(v.sucursal)} · ${v.situaciones.length} situación(es)</p>
+      <div class="summary">${chips}</div>${entries}</div>`;
+  }
+  el("informe-detail").innerHTML = `
+    <div class="toolbar">
+      <button class="btn secondary small" id="inf-volver">← Volver</button>
+      <div class="spacer"></div>
+      <button class="btn small" data-pinf="${inf.id}">📄 Descargar PDF</button>
+      <button class="btn secondary small danger" data-dinf="${inf.id}">🗑 Borrar</button>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <h1>${esc(inf.titulo)}</h1>
+      <p class="sub">${fmtDay(inf.desde)} → ${fmtDay(inf.hasta)} · ${inf.total_vendedores} vendedor(es) · ${inf.total_situaciones} situación(es) · creado ${fmtDateTime(inf.created_at)}</p>
+    </div>
+    ${body || '<div class="card"><p class="muted">Sin datos.</p></div>'}`;
+  el("informes-list").hidden = true;
+  el("informe-detail").hidden = false;
+  el("inf-volver").addEventListener("click", renderInformes);
+  el("informe-detail").querySelectorAll(".thumb img").forEach((img) => img.addEventListener("click", () => openLightbox(img.dataset.full)));
+  el("informe-detail").querySelectorAll("[data-pinf]").forEach((b) => b.addEventListener("click", () => pdfInforme(b.dataset.pinf)));
+  el("informe-detail").querySelectorAll("[data-dinf]").forEach((b) => b.addEventListener("click", () => borrarInforme(b.dataset.dinf)));
+}
+
+async function pdfInforme(id) {
+  const inf = await fetchInforme(id);
+  if (!inf) return;
+  await renderPDF({
+    titulo: inf.titulo,
+    scopeLabel: `${fmtDay(inf.desde)} → ${fmtDay(inf.hasta)}`,
+    fname: `reporte-${inf.anio}-${p2(inf.mes || 0)}-${inf.periodo}.pdf`,
+    vendedores: (inf.data && inf.data.vendedores) || [],
+  }, { incluirImgs: true });
+}
+
+async function borrarInforme(id) {
+  if (!confirm("¿Borrar este reporte guardado? (No afecta las situaciones, solo borra el reporte cerrado.)")) return;
+  const { error } = await sb.from("rv_informes").delete().eq("id", id);
+  if (error) { toast("Error al borrar", true); console.error(error); return; }
+  informes = informes.filter((x) => x.id !== id);
+  toast("✓ Reporte borrado");
+  renderInformes();
+}
+
+/* ========================================================
    TABS + INIT
 ======================================================== */
-document.querySelectorAll(".tab").forEach((t) =>
-  t.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
-    t.classList.add("active");
-    const tab = t.dataset.tab;
-    el("tab-cargar").hidden = tab !== "cargar";
-    el("tab-reporte").hidden = tab !== "reporte";
-    if (tab === "reporte") { renderVendList(); syncSelAll(); }
-  })
-);
+function switchTab(tab) {
+  document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x.dataset.tab === tab));
+  el("tab-cargar").hidden = tab !== "cargar";
+  el("tab-reporte").hidden = tab !== "reporte";
+  el("tab-reportes").hidden = tab !== "reportes";
+  if (tab === "reporte") { renderVendList(); syncSelAll(); }
+  if (tab === "reportes") renderInformes();
+}
+document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
 
 (async function init() {
-  await Promise.all([loadVendedores(), loadReportes()]);
+  await Promise.all([loadVendedores(), loadReportes(), loadInformes()]);
   fillSucursalSelects(); fillVendedorSelect(); renderVendList();
 })();
