@@ -164,6 +164,7 @@ el("form").addEventListener("submit", async (e) => {
     fillVendedorSelect();
     toast("✓ Reporte cargado");
     await loadReportes();
+    fillPeriodoSelect();
   } catch (err) {
     console.error(err); toast("Error al enviar: " + (err.message || err), true);
   } finally {
@@ -177,10 +178,52 @@ el("form").addEventListener("submit", async (e) => {
 el("r-sucursal").addEventListener("change", () => { renderVendList(); syncSelAll(); });
 el("btn-refresh").addEventListener("click", refreshAll);
 
+/* ---- filtro por período (fecha de carga / quincena) ---- */
+let periodo = null; // { desde, hasta } o null = todos
+function enPeriodo(r) {
+  if (!periodo) return true;
+  const f = fechaCargaLocal(r.created_at);
+  return f >= periodo.desde && f <= periodo.hasta;
+}
+function reportesVisibles(id) { return reportesDe(id).filter(enPeriodo); }
+
+function fillPeriodoSelect() {
+  const cur = el("r-periodo").value;
+  const seen = new Map();
+  for (const r of reportes) {
+    const d = new Date(r.created_at);
+    const anio = d.getFullYear(), mes = d.getMonth() + 1, q = d.getDate() <= 15 ? 1 : 2;
+    const key = `${anio}-${p2(mes)}-${q}`;
+    if (!seen.has(key)) seen.set(key, { anio, mes, q });
+  }
+  const keys = [...seen.keys()].sort((a, b) => b.localeCompare(a)); // más nuevo primero
+  let opts = `<option value="">Todos los períodos</option>`;
+  for (const key of keys) {
+    const b = seen.get(key);
+    opts += `<option value="${key}">${MESES[b.mes - 1]} ${b.anio} — ${b.q === 1 ? "1ª" : "2ª"} quincena</option>`;
+  }
+  el("r-periodo").innerHTML = opts;
+  el("r-periodo").value = keys.includes(cur) ? cur : "";
+  if (!keys.includes(cur)) periodo = null;
+}
+
+el("r-periodo").addEventListener("change", () => {
+  const v = el("r-periodo").value;
+  if (!v) periodo = null;
+  else {
+    const [anio, mes, q] = v.split("-").map(Number);
+    periodo = q === 1
+      ? { desde: `${anio}-${p2(mes)}-01`, hasta: `${anio}-${p2(mes)}-15` }
+      : { desde: `${anio}-${p2(mes)}-16`, hasta: `${anio}-${p2(mes)}-${p2(lastDay(anio, mes))}` };
+  }
+  renderVendList(); syncSelAll();
+  if (selectedVendedor) renderDetail(selectedVendedor);
+});
+
 async function refreshAll() {
   el("vend-list").innerHTML = `<div class="loader">Cargando…</div>`;
   await Promise.all([loadVendedores(), loadReportes()]);
-  fillSucursalSelects(); fillVendedorSelect();
+  fillSucursalSelects(); fillVendedorSelect(); fillPeriodoSelect();
   renderVendList();
   if (selectedVendedor) renderDetail(selectedVendedor);
 }
@@ -200,7 +243,7 @@ function renderVendList() {
   let html = "", lastSuc = null;
   for (const v of list) {
     if (v.sucursal !== lastSuc) { html += `<div class="suc-group">${esc(v.sucursal)}</div>`; lastSuc = v.sucursal; }
-    const n = reportesDe(v.id).length;
+    const n = reportesVisibles(v.id).length;
     html += `<div class="vend-item ${selectedVendedor === v.id ? "active" : ""}" data-id="${v.id}">
       <input type="checkbox" class="pick" data-pick="${v.id}" ${pdfPick.has(v.id) ? "checked" : ""} />
       <div class="who"><div class="name">${esc(v.nombre)}</div><div class="suc">${esc(v.sucursal)}</div></div>
@@ -237,7 +280,7 @@ function conteoPorSituacion(rs) {
 function renderDetail(vendId) {
   const v = vendedores.find((x) => x.id === vendId);
   if (!v) return;
-  const rs = reportesDe(vendId);
+  const rs = reportesVisibles(vendId);
   const conteo = conteoPorSituacion(rs);
   const summary = conteo.length
     ? `<div class="summary">${conteo.map((c) => `<span class="chip">${esc(c.label)}<b>${c.count}</b></span>`).join("")}</div>`
@@ -260,7 +303,7 @@ function renderDetail(vendId) {
   el("detail").innerHTML = `
     <div class="card">
       <h1>${esc(v.nombre)}</h1>
-      <p class="sub">${esc(v.sucursal)} · ${rs.length} situación(es) registradas</p>
+      <p class="sub">${esc(v.sucursal)} · ${rs.length} situación(es)${periodo ? ` · <b>${el("r-periodo").selectedOptions[0].textContent}</b>` : " registradas"}</p>
       <strong style="font-size:13px;color:var(--muted);">Conteo por situación</strong>
       ${summary}
       <div id="entries">${entries || '<p class="muted">Sin registros.</p>'}</div>
@@ -466,7 +509,7 @@ function datasetDesdeSeleccion() {
       : sucs.length === 1 ? `reporte-${sucs[0].replace(/\s+/g, "_")}.pdf` : `reporte-vendedores.pdf`,
     vendedores: seleccion.map((v) => ({
       nombre: v.nombre, sucursal: v.sucursal,
-      situaciones: reportesDe(v.id).map((r) => ({
+      situaciones: reportesVisibles(v.id).map((r) => ({
         situacion: r.situacion, cuerpo: r.cuerpo, fecha_hecho: r.fecha_hecho, created_at: r.created_at, imagen_url: r.imagen_url,
       })),
     })),
@@ -846,5 +889,5 @@ document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () 
 
 (async function init() {
   await Promise.all([loadVendedores(), loadReportes(), loadInformes()]);
-  fillSucursalSelects(); fillVendedorSelect(); renderVendList();
+  fillSucursalSelects(); fillVendedorSelect(); fillPeriodoSelect(); renderVendList();
 })();
